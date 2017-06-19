@@ -27,16 +27,28 @@ namespace DaggerfallConnect.Save
         #region Fields
 
         const string filename = "SAVEVARS.DAT";
+        const int emperorSonNameOffset = 0x7C;
+        const int travelFlagsOffset = 0xF5;
+        const int isDayOffset = 0x391;
+        const int inDungeonWaterOffset = 0x3A6;
         const int weaponDrawnOffset = 0x3BF;
         const int gameTimeOffset = 0x3C9;
-        const int cheatsOffset = 0x173B;
+        const int usingLeftHandWeaponOffset = 0x3D9;
+        const int cheatFlagsOffset = 0x173B;
         const int lastSkillCheckTimeOffset = 0x179A;
         const int factionDataOffset = 0x17D0;
         const int factionDataLength = 92;
 
+        string emperorSonName = ""; // Randomly chosen and can be used in character history, where it fills in %imp.
+        bool recklessTravel = false;
+        bool campOutTravel = false;
+        bool shipTravel = false;
+        bool isDay = false;
+        bool inDungeonWater = false;
         bool weaponDrawn = false;
         uint gameTime = 0;
-        //bool allMapLocationsRevealed = false; Commented out to silence warning until DF Unity supports hidden map locations
+        bool usingLeftHandWeapon = false;
+        bool allMapLocationsRevealedMode = false;
         bool godMode = false;
         uint lastSkillCheckTime = 0;
 
@@ -49,12 +61,38 @@ namespace DaggerfallConnect.Save
         #region Structures and Enumerations
 
         /// <summary>
+        /// Emperor's son's name.
+        /// </summary>
+        string[] emperorSonNames = { "Pelagius", "Cephorus", "Uriel", "Cassynder", "Voragiel", "Trabbatus" };
+
+        /// <summary>
+        /// Travel flags.
+        /// </summary>
+        [Flags]
+        public enum TravelFlags
+        {
+            None = 0x00, // Cautiously, Foot/Horse, Inns
+            Recklessly = 0x01,
+            Ship = 0x02,
+            CampOut = 0x0A,
+        }
+
+        /// <summary>
+        /// Weapon status flags.
+        /// </summary>
+        [Flags]
+        public enum WeaponStatusFlags
+        {
+            WeaponDrawn = 0x40,
+        }
+
+        /// <summary>
         /// Cheat flags.
         /// </summary>
         [Flags]
         public enum CheatFlags
         {
-            AllMapLocationsRevealed = 0x08,
+            AllMapLocationsRevealedMode = 0x08,
             GodMode = 0x40,
         }
 
@@ -65,6 +103,54 @@ namespace DaggerfallConnect.Save
         public static string Filename
         {
             get { return filename; }
+        }
+
+        /// <summary>
+        /// Gets Emperor's son's name from savevars.
+        /// </summary>
+        public string EmperorSonName
+        {
+            get { return emperorSonName; }
+        }
+
+        /// <summary>
+        /// Gets whether reckless travel is set from savevars.
+        /// </summary>
+        public bool RecklessTravel
+        {
+            get { return recklessTravel; }
+        }
+
+        /// <summary>
+        /// Gets whether camp out travel is set from savevars.
+        /// </summary>
+        public bool CampOutTravel
+        {
+            get { return campOutTravel; }
+        }
+
+        /// <summary>
+        /// Gets whether ship travel is set from savevars.
+        /// </summary>
+        public bool ShipTravel
+        {
+            get { return shipTravel; }
+        }
+
+        /// <summary>
+        /// Gets whether it is daytime from savevars.
+        /// </summary>
+        public bool IsDay
+        {
+            get { return isDay; }
+        }
+
+        /// <summary>
+        /// Gets whether character is in dungeon water from savevars.
+        /// </summary>
+        public bool InDungeonWater
+        {
+            get { return inDungeonWater; }
         }
 
         /// <summary>
@@ -84,11 +170,27 @@ namespace DaggerfallConnect.Save
         }
 
         /// <summary>
-        /// Gets whether GodMode is on from savevars.
+        /// Gets whether left-hand weapon is being used from savevars.
+        /// </summary>
+        public bool UsingLeftHandWeapon
+        {
+            get { return usingLeftHandWeapon; }
+        }
+
+        /// <summary>
+        /// Gets whether invulnerability cheat is on from savevars.
         /// </summary>
         public bool GodMode
         {
             get { return godMode; }
+        }
+
+        /// <summary>
+        /// Gets whether cheat to reveal all map locations is on from savevars.
+        /// </summary>
+        public bool AllMapLocationsRevealedMode
+        {
+            get { return allMapLocationsRevealedMode; }
         }
 
         /// <summary>
@@ -149,9 +251,14 @@ namespace DaggerfallConnect.Save
             BinaryReader reader = saveVarsFile.GetReader();
 
             // Read data
+            ReadEmperorSonName(reader);
+            ReadTravelFlags(reader);
+            ReadIsDay(reader);
+            ReadInDungeonWater(reader);
             ReadWeaponDrawn(reader);
             ReadGameTime(reader);
-            ReadGodMode(reader);
+            ReadUsingLeftHandWeapon(reader);
+            ReadCheatFlags(reader);
             ReadLastSkillCheckTime(reader);
             ReadFactionData(reader);
 
@@ -162,10 +269,44 @@ namespace DaggerfallConnect.Save
 
         #region Private Methods
 
+        void ReadEmperorSonName(BinaryReader reader)
+        {
+            reader.BaseStream.Position = emperorSonNameOffset;
+            emperorSonName = emperorSonNames[reader.ReadByte()];
+        }
+
+        void ReadTravelFlags(BinaryReader reader)
+        {
+            reader.BaseStream.Position = travelFlagsOffset;
+            short flags = reader.ReadInt16();
+            flags = (short)(flags - 533);
+            if ((flags & (byte)TravelFlags.Recklessly) != 0)
+                recklessTravel = true;
+            if ((flags & (byte)TravelFlags.Ship) != 0)
+                shipTravel = true;
+            if ((flags & (byte)TravelFlags.CampOut) != 0)
+                campOutTravel = true;
+        }
+
+        void ReadIsDay(BinaryReader reader)
+        {
+            reader.BaseStream.Position = isDayOffset;
+            if (reader.ReadByte() == 1)
+                isDay = true;
+        }
+
+        void ReadInDungeonWater(BinaryReader reader)
+        {
+            reader.BaseStream.Position = inDungeonWaterOffset;
+            if (reader.ReadByte() == 1)
+                inDungeonWater = true;
+        }
+
         void ReadWeaponDrawn(BinaryReader reader)
         {
             reader.BaseStream.Position = weaponDrawnOffset;
-            if (reader.ReadByte() == 0x40)
+            byte flags = reader.ReadByte();
+            if ((flags & (byte)WeaponStatusFlags.WeaponDrawn) != 0)
                 weaponDrawn = true;
         }
 
@@ -175,19 +316,19 @@ namespace DaggerfallConnect.Save
             gameTime = reader.ReadUInt32();
         }
 
-        /* Commented out to silence warning until DF Unity supports hidden map locations
-        void ReadAllMapLocationsRevealed(BinaryReader reader)
+        void ReadUsingLeftHandWeapon(BinaryReader reader)
         {
-            reader.BaseStream.Position = cheatsOffset;
-            byte flags = reader.ReadByte();
-            if ((flags & (byte)CheatFlags.AllMapLocationsRevealed) != 0)
-                allMapLocationsRevealed = true;
-        }*/
+            reader.BaseStream.Position = usingLeftHandWeaponOffset;
+            if (reader.ReadByte() == 1)
+                usingLeftHandWeapon = true;
+        }
 
-        void ReadGodMode(BinaryReader reader)
+        void ReadCheatFlags(BinaryReader reader)
         {
-            reader.BaseStream.Position = cheatsOffset;
+            reader.BaseStream.Position = cheatFlagsOffset;
             byte flags = reader.ReadByte();
+            if ((flags & (byte)CheatFlags.AllMapLocationsRevealedMode) != 0)
+                allMapLocationsRevealedMode = true;
             if ((flags & (byte)CheatFlags.GodMode) != 0)
                 godMode = true;
         }
