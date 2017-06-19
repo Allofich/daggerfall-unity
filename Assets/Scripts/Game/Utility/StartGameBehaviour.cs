@@ -498,6 +498,15 @@ namespace DaggerfallWorkshop.Game.Utility
             // GodMode setting
             playerEntity.GodMode = saveVars.GodMode;
 
+            // Travel flags
+            DaggerfallUI.Instance.TravelMapWindow.SpeedCautious = saveVars.CautiousTravel;
+            Debug.Log("SpeedCautious " + DaggerfallUI.Instance.TravelMapWindow.SpeedCautious);
+            DaggerfallUI.Instance.TravelMapWindow.TravelFoot = saveVars.FootOrHorseTravel;
+            Debug.Log("TravelFoot " + DaggerfallUI.Instance.TravelMapWindow.TravelFoot);
+            DaggerfallUI.Instance.TravelMapWindow.SleepModeInn = saveVars.InnsTravel;
+            Debug.Log("SleepModeInn " + DaggerfallUI.Instance.TravelMapWindow.SleepModeInn);
+            Debug.Log(DaggerfallUI.Instance.TravelMapWindow.SpeedCautious);
+
             // Setup bank accounts
             var bankRecords = saveTree.FindRecord(RecordTypes.BankAccount);
             Banking.DaggerfallBankManager.ReadNativeBankData(bankRecords);

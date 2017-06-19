@@ -166,6 +166,11 @@ namespace DaggerfallWorkshop.Game
             get { return dfBookReaderWindow; }
         }
 
+        public DaggerfallTravelMapWindow TravelMapWindow
+        {
+            get { return dfTravelMapWindow; }
+        }
+
         public DaggerfallAutomapWindow AutomapWindow
         {
             get { return dfAutomapWindow; }

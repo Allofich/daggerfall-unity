@@ -124,6 +124,10 @@ namespace DaggerfallWorkshop.Game.UserInterfaceWindows
             : base(uiManager, previousWindow)
         {
             this.travelWindow = travelWindow;
+            this.speedCautious = travelWindow.SpeedCautious;
+            this.travelFoot = travelWindow.TravelFoot;
+            Debug.Log("popup travel foot " + this.travelFoot);
+            this.sleepModeInn = travelWindow.SleepModeInn;
         }
 
         #endregion

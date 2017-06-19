@@ -128,6 +128,10 @@ namespace DaggerfallWorkshop.Game.UserInterfaceWindows
         static bool filterHomes     = false;
         static bool filterTowns     = false;
 
+        static bool speedCautious   = true;
+        static bool travelFoot = true;
+        static bool sleepModeInn = true;
+
         Vector2 lastMousePos = Vector2.zero;
         Vector2 zoomOffset = Vector2.zero;
         Vector2 zoomPosition = Vector2.zero;
@@ -137,6 +141,10 @@ namespace DaggerfallWorkshop.Game.UserInterfaceWindows
         #region Properties
 
         string RegionImgName { get; set; }
+
+        public bool SpeedCautious { get { return speedCautious; } set { speedCautious = value; } }
+        public bool TravelFoot { get { return travelFoot; } set { travelFoot = value; } }
+        public bool SleepModeInn { get { return sleepModeInn; } set { sleepModeInn = value; } }
 
         bool HasMultipleMaps
         {
