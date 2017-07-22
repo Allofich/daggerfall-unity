@@ -553,6 +553,13 @@ namespace DaggerfallWorkshop.Game
             // Set to start position
             MovePlayerToMarker(marker);
 
+            Debug.Log("x world position" + transform.position.x);
+            Debug.Log("x local position" + transform.localPosition.x);
+            Debug.Log("y world position" + transform.position.y);
+            Debug.Log("y local position" + transform.localPosition.y);
+            Debug.Log("z world position" + transform.position.z);
+            Debug.Log("z local position" + transform.localPosition.z);
+
             // Set player facing north
             PlayerMouseLook playerMouseLook = GameManager.Instance.PlayerMouseLook;
             if (playerMouseLook)

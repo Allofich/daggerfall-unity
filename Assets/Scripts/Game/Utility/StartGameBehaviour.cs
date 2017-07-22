@@ -444,6 +444,20 @@ namespace DaggerfallWorkshop.Game.Utility
             SaveVars saveVars = saveGames.SaveVars;
 
             SaveTreeBaseRecord positionRecord = saveTree.FindRecord(RecordTypes.CharacterPositionRecord);
+            int environment = saveTree.Header.Environment;
+
+            // Get map pixel
+            DFPosition mapPixel = MapsFile.WorldCoordToMapPixel(positionRecord.RecordRoot.Position.WorldX, positionRecord.RecordRoot.Position.WorldZ);
+
+            // Read location if any
+            DFLocation location = new DFLocation();
+            ContentReader.MapSummary mapSummary;
+            bool hasLocation = DaggerfallUnity.Instance.ContentReader.HasLocation(mapPixel.X, mapPixel.Y, out mapSummary);
+            if (hasLocation)
+            {
+                if (!DaggerfallUnity.Instance.ContentReader.GetLocation(mapSummary.RegionIndex, mapSummary.MapIndex, out location))
+                    hasLocation = false;
+            }
 
             if (NoWorld)
             {
@@ -451,13 +465,42 @@ namespace DaggerfallWorkshop.Game.Utility
             }
             else
             {
-                // Set player to world position
-                playerEnterExit.EnableExteriorParent();
+                // Set player to position from classic save
                 StreamingWorld streamingWorld = FindStreamingWorld();
-                int worldX = positionRecord.RecordRoot.Position.WorldX;
-                int worldZ = positionRecord.RecordRoot.Position.WorldZ;
-                streamingWorld.TeleportToWorldCoordinates(worldX, worldZ);
-                streamingWorld.suppressWorld = false;
+                if (hasLocation && (environment == 3) && location.HasDungeon)
+                {
+                    if (streamingWorld)
+                    {
+                        streamingWorld.TeleportToCoordinates(mapPixel.X, mapPixel.Y);
+                        streamingWorld.suppressWorld = true;
+                    }
+                    playerEnterExit.EnableDungeonParent();
+                    playerEnterExit.StartDungeonInterior(location);
+
+                    //DFPosition originWorldPos = MapsFile.MapPixelToWorldCoord(mapPixel.X, mapPixel.Y);
+
+                    //Debug.Log("classic X " + positionRecord.RecordRoot.Position.WorldX);
+                    //Debug.Log("originWorld X " + originWorldPos.X);
+                    //Debug.Log("translated originWorld X " + (originWorldPos.X / (1 / 0.025f)));
+
+
+                    // Find reposition offset based on difference between tile origin and desired absolute position
+                    //Vector3 offset = new Vector3(
+                      //  (worldPosX - originWorldPos.X) / (1 / 0.025f),
+                       // 0,
+                       // (worldPosZ - originWorldPos.Y) / (1 / 0.025f));
+                }
+                else
+                {
+                    playerEnterExit.EnableExteriorParent();
+                    if (streamingWorld)
+                    {
+                        int worldX = positionRecord.RecordRoot.Position.WorldX;
+                        int worldZ = positionRecord.RecordRoot.Position.WorldZ;
+                        streamingWorld.TeleportToWorldCoordinates(worldX, worldZ);
+                        streamingWorld.suppressWorld = false;
+                    }
+                }
             }
 
             GameObject cameraObject = GameObject.FindGameObjectWithTag("MainCamera");
