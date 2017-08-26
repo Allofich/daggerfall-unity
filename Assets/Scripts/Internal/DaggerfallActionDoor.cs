@@ -127,15 +127,19 @@ namespace DaggerfallWorkshop
                 Close(duration);
         }
 
-        public void LookAtLock()
+        public static void LookAtLock(int lockValue, bool exteriorDoor = false)
         {
-            if (CurrentLockValue < 20)
+            if (lockValue < 20)
             {
+                int chance = 0;
                 PlayerEntity player = Game.GameManager.Instance.PlayerEntity;
-                // There seems to be an oversight in classic. It uses two separate lockpicking functions (seems to be one for animated doors in interiors and one for exterior doors)
+                // Classic has two different lockpicking functions, one for interior doors and one for exterior doors,
                 // but the difficulty text is always based on the exterior function.
-                // DF Unity doesn't have exterior locked doors yet, so the below uses the interior function.
-                int chance = FormulaHelper.CalculateInteriorLockpickingChance(player.Level, CurrentLockValue, player.Skills.Lockpicking);
+                // For DF Unity, the difficulty text matches which function is being used.
+                if (exteriorDoor)
+                    chance = FormulaHelper.CalculateExteriorLockpickingChance(lockValue, player.Skills.Lockpicking);
+                else
+                    chance = FormulaHelper.CalculateInteriorLockpickingChance(player.Level, lockValue, player.Skills.Lockpicking);
 
                 if (chance >= 30)
                     if (chance >= 35)
@@ -264,7 +268,7 @@ namespace DaggerfallWorkshop
             if ((IsLocked && !ignoreLocks) || IsOpen)
             {
                 if(!IsOpen)
-                    LookAtLock();
+                    LookAtLock(CurrentLockValue);
                 return;
             }
 

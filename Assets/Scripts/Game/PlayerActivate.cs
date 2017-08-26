@@ -88,6 +88,8 @@ namespace DaggerfallWorkshop.Game
                     bool hitBuilding = false;
                     bool buildingUnlocked = false;
                     DFLocation.BuildingTypes buildingType = DFLocation.BuildingTypes.AllValid;
+                    int buildingNameSeed = 0;
+
                     StaticBuilding building = new StaticBuilding();
 
                     for (int i = 0; i < hits.Length; i++)
@@ -116,8 +118,9 @@ namespace DaggerfallWorkshop.Game
                                 // Check if door is unlocked
                                 buildingUnlocked = BuildingIsUnlocked(buildingSummary);
 
-                                // Store building type
+                                // Store building type and name seed
                                 buildingType = buildingSummary.BuildingType;
+                                buildingNameSeed = buildingSummary.NameSeed;
 
                                 // Discover building
                                 GameManager.Instance.PlayerGPS.DiscoverBuilding(building.buildingKey);
@@ -151,13 +154,14 @@ namespace DaggerfallWorkshop.Game
                             {
                                 if (door.doorType == DoorTypes.Building && !playerEnterExit.IsPlayerInside)
                                 {
-                                    // TODO: Implement lockpicking and door bashing for exterior doors
-                                    // For now, any locked building door can be entered by using steal mode
-                                    if (!buildingUnlocked && (currentMode != PlayerActivateModes.Steal))
+                                    if (!buildingUnlocked)
                                     {
-                                        string Locked = "Locked.";
-                                        DaggerfallUI.Instance.PopupMessage(Locked);
-                                        return;
+                                        int lockValue = (buildingNameSeed % 10) + 3;
+                                        if (currentMode != PlayerActivateModes.Steal)
+                                        {
+                                            DaggerfallActionDoor.LookAtLock(lockValue);
+                                            return;
+                                        }
                                     }
 
                                     // If entering a shop let player know the quality level

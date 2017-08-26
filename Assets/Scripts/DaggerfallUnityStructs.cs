@@ -320,7 +320,7 @@ namespace DaggerfallWorkshop
     public struct BuildingSummary
     {
         public int buildingKey;                         // Building key unique to parent location
-        public int NameSeed;                            // Name seed of building - not set at block level
+        public ushort NameSeed;                         // Name seed of building - not set at block level
         public int FactionId;                           // Faction ID of building
         public DFLocation.BuildingTypes BuildingType;   // Type of building
         public int Quality;                             // Quality of building
