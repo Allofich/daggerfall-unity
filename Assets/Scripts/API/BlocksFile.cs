@@ -584,8 +584,7 @@ namespace DaggerfallConnect.Arena2
                 blocks[block].DFBlock.RmbBlock.FldHeader.BuildingDataList[i].Unknown3 = reader.ReadUInt32();
                 blocks[block].DFBlock.RmbBlock.FldHeader.BuildingDataList[i].Unknown4 = reader.ReadUInt32();
                 blocks[block].DFBlock.RmbBlock.FldHeader.BuildingDataList[i].FactionId = reader.ReadUInt16();
-                blocks[block].DFBlock.RmbBlock.FldHeader.BuildingDataList[i].Sector = reader.ReadInt16();
-                blocks[block].DFBlock.RmbBlock.FldHeader.BuildingDataList[i].LocationId = reader.ReadUInt16();
+                blocks[block].DFBlock.RmbBlock.FldHeader.BuildingDataList[i].RecordId = reader.ReadUInt32();
                 blocks[block].DFBlock.RmbBlock.FldHeader.BuildingDataList[i].BuildingType = (DFLocation.BuildingTypes)reader.ReadByte();
                 blocks[block].DFBlock.RmbBlock.FldHeader.BuildingDataList[i].Quality = reader.ReadByte();
             }

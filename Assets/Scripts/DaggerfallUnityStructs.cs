@@ -330,6 +330,7 @@ namespace DaggerfallWorkshop
         public Vector3 Position;                        // Position of building
         public Vector3 Rotation;                        // Rotation of building
         public Matrix4x4 Matrix;                        // Transform matrix of building
+        public uint RecordId;
     }
 
     /// <summary>

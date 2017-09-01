@@ -1048,8 +1048,7 @@ namespace DaggerfallConnect.Arena2
                 dfLocation.Exterior.Buildings[building].Unknown3 = reader.ReadUInt32();
                 dfLocation.Exterior.Buildings[building].Unknown4 = reader.ReadUInt32();
                 dfLocation.Exterior.Buildings[building].FactionId = reader.ReadUInt16();
-                dfLocation.Exterior.Buildings[building].Sector = reader.ReadInt16();
-                dfLocation.Exterior.Buildings[building].LocationId = reader.ReadUInt16();
+                dfLocation.Exterior.Buildings[building].RecordId = reader.ReadUInt32();
                 dfLocation.Exterior.Buildings[building].BuildingType = (DFLocation.BuildingTypes)reader.ReadByte();
                 dfLocation.Exterior.Buildings[building].Quality = reader.ReadByte();
             }

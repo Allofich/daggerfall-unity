@@ -81,8 +81,7 @@ namespace DaggerfallConnect.Save
                 recordData[i].Unknown3 = reader.ReadUInt32();
                 recordData[i].Unknown4 = reader.ReadUInt32();
                 recordData[i].FactionId = reader.ReadUInt16();
-                recordData[i].Sector = reader.ReadInt16();
-                recordData[i].LocationId = reader.ReadUInt16();
+                recordData[i].RecordId = reader.ReadUInt32();
                 recordData[i].BuildingType = (DFLocation.BuildingTypes)reader.ReadByte();
                 recordData[i].Quality = reader.ReadByte();
             }

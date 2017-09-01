@@ -442,6 +442,7 @@ namespace DaggerfallWorkshop.Utility
                 buildings[i].FactionId = buildingData.FactionId;
                 buildings[i].BuildingType = buildingData.BuildingType;
                 buildings[i].Quality = buildingData.Quality;
+                buildings[i].RecordId = buildingData.RecordId;
 
                 // Set building transform info
                 DFBlock.RmbSubRecord subRecord = blockData.RmbBlock.SubRecords[i];
@@ -517,8 +518,7 @@ namespace DaggerfallWorkshop.Utility
                                 // Copy found city building data to block level
                                 building.NameSeed = item.buildingData.NameSeed;
                                 building.FactionId = item.buildingData.FactionId;
-                                building.Sector = item.buildingData.Sector;
-                                building.LocationId = item.buildingData.LocationId;
+                                building.RecordId = item.buildingData.RecordId;
                                 building.Quality = item.buildingData.Quality;
                             }
 

@@ -644,12 +644,13 @@ namespace DaggerfallWorkshop.Game
             DFLocation.BuildingTypes type = buildingSummary.BuildingType;
 
             // TODO: Guild structures can become unlocked 24hr depending on player rank
-
+            Debug.Log(buildingSummary.RecordId);
             // Handle House1 through House4
             // TODO: Figure out the rest of house door calculations.
             if (type >= DFLocation.BuildingTypes.House1 && type <= DFLocation.BuildingTypes.House4
                 && DaggerfallUnity.Instance.WorldTime.Now.IsDay)
             {
+                
                 unlocked = true;
             }
             // Handle other structures (stores, temples, taverns, palaces)
