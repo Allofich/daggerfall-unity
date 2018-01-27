@@ -175,19 +175,19 @@ namespace DaggerfallWorkshop.Game
             {
                 // Limit knockBackSpeed. This can be higher than what is actually used for the speed of motion,
                 // making it last longer and do more damage if the enemy collides with something.
-                if (knockBackSpeed > (40 / (PlayerMotor.classicToUnitySpeedUnitRatio / 10)))
-                    knockBackSpeed = (40 / (PlayerMotor.classicToUnitySpeedUnitRatio / 10));
+                if (knockBackSpeed > (40 / (PlayerMotor.classicToUnitySpeedUnitRatio / 5)))
+                    knockBackSpeed = (40 / (PlayerMotor.classicToUnitySpeedUnitRatio / 5));
 
-                if (knockBackSpeed > (5 / (PlayerMotor.classicToUnitySpeedUnitRatio / 10)) &&
+                if (knockBackSpeed > (5 / (PlayerMotor.classicToUnitySpeedUnitRatio / 5)) &&
                     mobile.Summary.EnemyState != MobileStates.PrimaryAttack)
                     mobile.ChangeEnemyState(MobileStates.Hurt);
 
                 // Actual speed of motion is limited
                 Vector3 motion;
-                if (knockBackSpeed <= (25 / (PlayerMotor.classicToUnitySpeedUnitRatio / 10)))
+                if (knockBackSpeed <= (25 / (PlayerMotor.classicToUnitySpeedUnitRatio / 5)))
                     motion = knockBackDirection * knockBackSpeed;
                 else
-                    motion = knockBackDirection * (25 / (PlayerMotor.classicToUnitySpeedUnitRatio / 10));
+                    motion = knockBackDirection * (25 / (PlayerMotor.classicToUnitySpeedUnitRatio / 5));
 
 				if (swims)
 				{
@@ -200,8 +200,8 @@ namespace DaggerfallWorkshop.Game
 
                 if (classicUpdate)
                 {
-                    knockBackSpeed -= (5 / (PlayerMotor.classicToUnitySpeedUnitRatio / 10));
-                    if (knockBackSpeed <= (5 / (PlayerMotor.classicToUnitySpeedUnitRatio / 10)) &&
+                    knockBackSpeed -= (5 / (PlayerMotor.classicToUnitySpeedUnitRatio / 5));
+                    if (knockBackSpeed <= (5 / (PlayerMotor.classicToUnitySpeedUnitRatio / 5)) &&
                         mobile.Summary.EnemyState != MobileStates.PrimaryAttack)
                         mobile.ChangeEnemyState(MobileStates.Move);
                 }
