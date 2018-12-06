@@ -70,6 +70,8 @@ namespace DaggerfallWorkshop.Game
         Vector3 strafeDest;
         bool searchedLastKnownPos;
         int searchMult = 0;
+        bool wandering;
+        Vector3 lastWanderDir;
 
         EnemySenses senses;
         Vector3 destination;
@@ -382,8 +384,107 @@ namespace DaggerfallWorkshop.Game
                 searchedLastKnownPos = false;
                 searchMult = 0;
 
-                return;
+                if (senses.WouldBeSpawnedInClassic && !senses.DetectedTarget)
+                {
+                    if (DaggerfallUnity.Settings.EnhancedCombatAI && giveUpTimer == 0 && avoidObstaclesTimer == 0)
+                    {
+                        // Wandering
+                        if (Random.Range(0, 3) != 0)
+                        {
+                            int checkDistance = 10;
+                            float x = transform.position.x;
+                            float y = transform.position.y;
+                            float z = transform.position.z;
+                            float xMax;
+                            float xMin;
+                            float zMax;
+                            float zMin;
+
+                            Vector3 pos = new Vector3(x + checkDistance, y, z);
+                            var dir = (pos - transform.position).normalized;
+
+                            Ray ray = new Ray(transform.position, dir);
+                            RaycastHit hit;
+                            if (Physics.Raycast(ray, out hit, checkDistance))
+                            {
+                                xMax = hit.distance / checkDistance;
+                            }
+                            else
+                                xMax = 1;
+
+                            pos = new Vector3(x - checkDistance, y, z);
+                            dir = (pos - transform.position).normalized;
+                            ray = new Ray(transform.position, dir);
+                            if (Physics.Raycast(ray, out hit, checkDistance))
+                            {
+                                xMin = hit.distance / checkDistance;
+                            }
+                            else
+                                xMin = 1;
+
+                            pos = new Vector3(x, y, z + checkDistance);
+                            dir = (pos - transform.position).normalized;
+                            ray = new Ray(transform.position, dir);
+                            if (Physics.Raycast(ray, out hit, checkDistance))
+                            {
+                                zMax = hit.distance / checkDistance;
+                            }
+                            else
+                                zMax = 1;
+
+                            pos = new Vector3(x, y, z - checkDistance);
+                            dir = (pos - transform.position).normalized;
+                            ray = new Ray(transform.position, dir);
+                            if (Physics.Raycast(ray, out hit, checkDistance))
+                            {
+                                zMin = hit.distance / checkDistance;
+                            }
+                            else
+                                zMin = 1;
+
+                            bool xPos = Random.Range(0, xMax) > Random.Range(0, xMin);
+                            bool zPos = Random.Range(0, zMax) > Random.Range(0, zMin);
+
+                            if (xPos)
+                                x += Random.Range(0, checkDistance);
+                            else
+                                x -= Random.Range(0, checkDistance);
+
+                            if (zPos)
+                                z += Random.Range(0, checkDistance);
+                            else
+                                z -= Random.Range(0, checkDistance);
+
+                            //z += Random.Range(zMin, zMax);
+
+                            pos = new Vector3(x, y, z);
+                            detourDestination = pos;
+                            giveUpTimer = Random.Range(100, 150);
+                            wandering = true;
+                            lastWanderDir = (pos - transform.position).normalized;
+                        }
+                        else
+                        {
+                            wandering = false;
+                            giveUpTimer = Random.Range(16, 48);
+                            return;
+                        }
+                    }
+                    /*else if (wandering && avoidObstaclesTimer == 0)
+                    {
+                        detourDestination = transform.position + lastWanderDir * 4;
+                    }*/
+                    else if (wandering && (detourDestination - transform.position).magnitude < 0.5f)
+                    {
+                        detourDestination = transform.position + lastWanderDir * 4;
+                    }
+                }
             }
+            else
+                wandering = false;
+
+            if (wandering)
+                moveSpeed /= 2;
 
             if (bashing)
             {
@@ -415,7 +516,7 @@ namespace DaggerfallWorkshop.Game
 
             // Get location to move towards. Either the combat target's position or, if trying to avoid an obstacle or fall,
             // a location to try to detour around the obstacle/fall.
-            if (avoidObstaclesTimer == 0 && ClearPathToPosition(senses.PredictedTargetPos))
+            if (!wandering && avoidObstaclesTimer == 0 && ClearPathToPosition(senses.PredictedTargetPos) && senses.Target)
             {
                 destination = senses.PredictedTargetPos;
                 // Flying enemies and slaughterfish aim for target face
@@ -435,8 +536,13 @@ namespace DaggerfallWorkshop.Game
                 searchedLastKnownPos = false;
                 searchMult = 0;
             }
+            else if (!wandering && DaggerfallUnity.Settings.EnhancedCombatAI && avoidObstaclesTimer == 0 && ClearPathToPosition(senses.LastKnownTargetPos))
+            {
+                destination = senses.LastKnownTargetPos + (senses.LastPositionDiff * 2);
+            }
+
             // If detouring, use the detour position
-            else if (avoidObstaclesTimer > 0)
+            else if (avoidObstaclesTimer > 0 || wandering)
             {
                 destination = detourDestination;
             }
@@ -531,7 +637,7 @@ namespace DaggerfallWorkshop.Game
                 EvaluateMoveInForAttack();
 
             // If detouring, attempt to move
-            if (avoidObstaclesTimer > 0)
+            if (avoidObstaclesTimer > 0 || wandering)
             {
                 AttemptMove(direction, moveSpeed);
             }
@@ -971,17 +1077,23 @@ namespace DaggerfallWorkshop.Game
             }
 
             angle = 0;
+            float angle2 = 0;
             int count = 0;
             testMove = Vector3.zero;
+            bool checkingClockwise2 = checkingClockwise;
 
             do
             {
-                if (checkingClockwise)
+                if (checkingClockwise2)
                     angle += 10;
                 else
-                    angle -= 10;
+                    angle2 -= 10;
 
-                testMove = Quaternion.AngleAxis(angle, Vector3.up) * motion2d;
+                if (checkingClockwise2)
+                    testMove = Quaternion.AngleAxis(angle, Vector3.up) * motion2d;
+                else
+                    testMove = Quaternion.AngleAxis(angle2, Vector3.up) * motion2d;
+
                 RayCheckForObstacle(testMove);
                 RayCheckForFall(testMove);
 
@@ -991,11 +1103,14 @@ namespace DaggerfallWorkshop.Game
                 {
                     break;
                 }
+
+                checkingClockwise2 = !checkingClockwise2;
             }
             while (obstacleDetected || fallDetected);
 
             detourDestination = transform.position + testMove.normalized * 2;
             detourDestination.y = transform.position.y;
+            lastWanderDir = testMove.normalized;
 
             if (avoidObstaclesTimer == 0)
                 avoidObstaclesTimer = 0.25f;
