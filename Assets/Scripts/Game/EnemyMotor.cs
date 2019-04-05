@@ -70,9 +70,11 @@ namespace DaggerfallWorkshop.Game
         Vector3 strafeDest;
         bool searchedLastKnownPos;
         int searchMult = 0;
+        float pathingTimer;
+        List<Vector3> path = new List<Vector3>();
 
         EnemySenses senses;
-        Vector3 destination;
+        Vector3 destination = EnemySenses.ResetPlayerPos;
         Vector3 detourDestination;
         CharacterController controller;
         DaggerfallMobileUnit mobile;
@@ -166,6 +168,9 @@ namespace DaggerfallWorkshop.Game
 
             if (strafeTimer > 0)
                 strafeTimer -= Time.deltaTime;
+
+            if (pathingTimer > 0)
+                pathingTimer -= Time.deltaTime;
         }
 
         // Limits maximum controller height
@@ -413,48 +418,164 @@ namespace DaggerfallWorkshop.Game
 
             bool clearPathToShootAtPredictedPos = false;
 
+            bool clear = ClearPathToPosition(senses.PredictedTargetPos);
+            if (clear)
+                path.Clear();
+
             // Get location to move towards. Either the combat target's position or, if trying to avoid an obstacle or fall,
             // a location to try to detour around the obstacle/fall.
-            if (avoidObstaclesTimer == 0 && ClearPathToPosition(senses.PredictedTargetPos))
+            if (avoidObstaclesTimer == 0 && path.Count > 0)
             {
-                destination = senses.PredictedTargetPos;
-                // Flying enemies and slaughterfish aim for target face
-                if (flies || isLevitating || (swims && mobile.Summary.Enemy.ID == (int)MonsterCareers.Slaughterfish))
-                    destination.y += 0.9f;
-                else
+                Vector3 path2D = path[0];
+                path2D.y = transform.position.y;
+                if ((path2D - transform.position).magnitude <= 0.3f)
                 {
-                    // Ground enemies target at their own height
-                    // This avoids short enemies from stepping on each other as they approach the target
-                    // Otherwise, their target vector aims up towards the target
-                    var targetController = senses.Target.GetComponent<CharacterController>();
-                    var deltaHeight = (targetController.height - controller.height) / 2;
-                    destination.y -= deltaHeight;
+                    path.RemoveAt(0);
                 }
+                if (path.Count > 0)
+                {
+                    avoidObstaclesTimer = 5;
 
-                clearPathToShootAtPredictedPos = true;
-                searchedLastKnownPos = false;
-                searchMult = 0;
+                    detourDestination = path[0];
+                    destination = detourDestination;
+                    //EnemyBlood sparkles2 = entityBehaviour.GetComponent<EnemyBlood>();
+                    //if (sparkles2)
+                    //{
+                    //    sparkles2.ShowMagicSparkles(destination);
+                    //}
+                    Debug.Log(path.Count);
+                }
+                else if (pathingTimer <= 0)
+                {
+                    // Get location to move towards. Either the combat target's position or, if trying to avoid an obstacle or fall,
+                    // a location to try to detour around the obstacle/fall.
+                    if (avoidObstaclesTimer == 0 && clear && senses.Target)
+                    {
+                        destination = senses.PredictedTargetPos;
+                        // Flying enemies and slaughterfish aim for target face
+                        if (flies || isLevitating || (swims && mobile.Summary.Enemy.ID == (int)MonsterCareers.Slaughterfish))
+                            destination.y += 0.9f;
+
+                        clearPathToShootAtPredictedPos = true;
+                        searchMult = 0;
+                    }
+                    // Otherwise, search for target based on its last known position and direction
+                    else
+                    {
+                        Vector3 searchPosition = senses.LastKnownTargetPos + (senses.LastPositionDiff.normalized * searchMult);
+                        if (searchMult <= 10 && (searchPosition - transform.position).magnitude <= stopDistance)
+                            searchMult++;
+
+                        destination = searchPosition;
+                    }
+
+                    if (!clear)
+                    {
+                        //if ((destination - transform.position).magnitude > 3.5f)
+                        //{
+                        int count = 0;
+                        bool reached = false;
+                        bool clockwise = true;
+                        float angle = 30;
+                        int multiplier = 1;
+                        float length = 2;
+                        Vector3 rayOrigin = transform.position;
+                        rayOrigin.y -= controller.height / 4;
+                        Vector3 rayDir = (destination - rayOrigin).normalized;
+                        Vector3 originalrayDir = rayDir;
+
+
+                        while (count < 30 && destination != EnemySenses.ResetPlayerPos)
+                        {
+                            if (!flies && !swims)
+                                rayDir.y = 0;
+                            Ray ray = new Ray(rayOrigin, rayDir);
+                            count++;
+                            RaycastHit hit;
+                            Debug.DrawRay(rayOrigin, rayDir * length, Color.red, 500, false);
+                            //if (!Physics.Raycast(ray, out hit, length))
+                            if (!Physics.SphereCast(rayOrigin, controller.radius / 2, rayDir, out hit, length))
+                            {
+                                rayOrigin = rayOrigin + (rayDir * length);
+                                Debug.Log("mag " + (rayOrigin - destination).magnitude);
+                                if ((rayOrigin - destination).magnitude <= 2)
+                                    break;
+                                multiplier = 1;
+                                angle = 30;
+                                //if (length < 3)
+                                //  length += 0.5f;
+                                rayDir = (destination - rayOrigin).normalized;
+                                originalrayDir = rayDir;
+                                clockwise = true;
+                                EnemyBlood sparkles2 = entityBehaviour.GetComponent<EnemyBlood>();
+                                if (sparkles2)
+                                {
+                                    sparkles2.ShowMagicSparkles(destination);
+                                    sparkles2.ShowBloodSplash(0, rayOrigin);
+                                }
+                                path.Add(rayOrigin);
+                            }
+                            else
+                            {
+                                DaggerfallActionDoor hitDoor = hit.transform.GetComponent<DaggerfallActionDoor>();
+                                if (hitDoor)
+                                {
+                                    rayOrigin = rayOrigin + (rayDir * length);
+                                    multiplier = 1;
+                                    angle = 30;
+                                    if (length < 3)
+                                        length += 0.5f;
+                                }
+                                else
+                                {
+                                    //if (length > 1f)
+                                    //    length -= 0.5f;
+                                    length = 2;
+                                    DaggerfallEntityBehaviour hitTarget = hit.transform.GetComponent<DaggerfallEntityBehaviour>();
+                                    if (hitTarget == senses.Target)
+                                    {
+                                        reached = true;
+                                        break;
+                                    }
+
+                                    /*Vector3 north = destination;
+                                    north.z++; // Adding 1 to z so this Vector3 will be north of the destination Vector3.
+                                    // Get angle between vector from destination to the north of it, and vector from destination to this enemy's position
+                                    angle = Vector3.SignedAngle(destination - north, destination - transform.position, Vector3.up);
+                                    if (angle < 0)
+                                        angle = 360 + angle;*/
+
+                                    // Convert to radians
+                                    //angle *= Mathf.PI / 180;
+
+                                    //Debug.Log(angle);
+
+                                    angle = 45 * multiplier;
+
+                                    if (!clockwise)
+                                    {
+                                        angle *= -1;
+                                        multiplier++;
+                                    }
+
+                                    clockwise = !clockwise;
+
+                                    rayDir = Quaternion.AngleAxis(angle, Vector3.up) * originalrayDir;
+                                }
+                            }
+                        }
+                        pathingTimer = 0.5f;
+                    }
+
+                    //if (path.Count > 0)
+                    //  destination = path[path.Count - 1];
+                    //}
+                }
             }
             // If detouring, use the detour position
             else if (avoidObstaclesTimer > 0)
             {
                 destination = detourDestination;
-            }
-            // Otherwise, search for target
-            else
-            {
-                Vector3 searchPosition = senses.LastKnownTargetPos + (senses.LastPositionDiff.normalized * searchMult);
-                if (!searchedLastKnownPos && (searchPosition - transform.position).magnitude <= stopDistance)
-                    searchedLastKnownPos = true;
-
-                if (!searchedLastKnownPos)
-                    destination = searchPosition;
-                else
-                {
-                    if ((searchPosition - transform.position).magnitude <= stopDistance)
-                        searchMult++;
-                    destination = searchPosition;
-                }
             }
 
             // Get direction & distance.
