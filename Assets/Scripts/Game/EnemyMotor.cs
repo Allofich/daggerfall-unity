@@ -452,7 +452,7 @@ namespace DaggerfallWorkshop.Game
                 if ((nextPoint - transform.position).magnitude <= 1f)
                 {
                     pathToTarget.RemoveAt(0);
-                    pathingTimer = 2f;
+                    pathingTimer = 5f;
                 }
 
                 if (pathToTarget.Count > 0)
@@ -460,9 +460,11 @@ namespace DaggerfallWorkshop.Game
                     destination = pathToTarget[0];
                 }
             }
+            else
+                pathingTimer = 0;
 
-            // If we're following a path and we can shortcut to the next one, do so
-            if (pathToTarget.Count > 1 && Mathf.Abs(pathToTarget[1].y - transform.position.y) <= 1 && ClearPathToPosition(pathToTarget[1], (pathToTarget[1] - transform.position).magnitude))
+            // If we're following a path and we can shortcut to the next one, do so. Don't omit the last point, though.
+            if (pathToTarget.Count > 2 && Mathf.Abs(pathToTarget[1].y - transform.position.y) <= 1 && ClearPathToPosition(pathToTarget[1], (pathToTarget[1] - transform.position).magnitude))
             {
                 pathToTarget.RemoveAt(0);
                 destination = pathToTarget[0];
@@ -513,7 +515,7 @@ namespace DaggerfallWorkshop.Game
                     rayOrigin.z = Mathf.Round(transform.position.z);
 
                     // Limit how many omitted points we remember
-                    if (omittedPoints.Count > 100)
+                    if (omittedPoints.Count > 300)
                         omittedPoints.Clear();
 
                     int count = 0;
@@ -541,6 +543,8 @@ namespace DaggerfallWorkshop.Game
 
                     bool canGoUp = true;
                     bool canGoDown = true;
+
+                    bool success = false;
 
                     while (count < 70 && rayOrigins.Count > 0)
                     {
@@ -657,8 +661,11 @@ namespace DaggerfallWorkshop.Game
                             if (acceptableDrop)
                             {
                                 // This rayDest is close to the destination, so stop searching
-                                if ((destination - rayDest).magnitude <= 2)
+                                if (ClearPathToPosition(destination, (destination - rayOrigin).magnitude))
+                                {
+                                    success = true;
                                     break;
+                                }
 
                                 // Check if the y-difference of this point is acceptable to include in path searching
                                 float yDiff = rayOrigin.y - rayDest.y;
@@ -729,6 +736,8 @@ namespace DaggerfallWorkshop.Game
                     foreach (Vector3 origin in rayOrigins)
                     {
                         pathToTarget.Insert(0, origin);
+                        if (!success)
+                            omittedPoints.Insert(0, origin);
                     }
 
                     pathingTimer = 0.5f;
