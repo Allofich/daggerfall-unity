@@ -231,7 +231,7 @@ namespace DaggerfallWorkshop.Game
             {
                 if (distanceToPlayer < 1094 * MeshReader.GlobalScale)
                 {
-                    float upperXZ = 0;
+                    float upperXZ;
                     float upperY = 0;
                     float lowerY = 0;
                     bool playerInside = GameManager.Instance.PlayerGPS.GetComponent<PlayerEnterExit>().IsPlayerInside;
