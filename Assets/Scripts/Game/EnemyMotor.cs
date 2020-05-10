@@ -420,21 +420,22 @@ namespace DaggerfallWorkshop.Game
                 needToPath = !ClearPathBetweenPositions(transform.position + controller.center, senses.PredictedTargetPos, (senses.PredictedTargetPos - (transform.position + controller.center)).magnitude);
 
                 if (!needToPath)
+                {
                     pathToTarget.Clear();
+                    pathingTimer = 0;
+                }
 
                 // If we're following a path and got close to the next point, remove it.
                 if (pathToTarget.Count > 0)
                 {
                     Vector3 nextPoint = pathToTarget[0];
                     nextPoint.y = (transform.position + controller.center).y;
-                    if ((nextPoint - transform.position + controller.center).magnitude <= 1f) // 0.3f
+                    if ((nextPoint - transform.position + controller.center).magnitude <= 0.3f) // 0.3f
                     {
                         pathToTarget.RemoveAt(0);
                         pathingTimer = 5f;
                     }
                 }
-                else
-                    pathingTimer = 0;
 
                 // If we're following a path and we can shortcut to the next one, omit the current destination. Don't omit the last point, though.
                 if (pathToTarget.Count > 2 && Mathf.Abs(pathToTarget[1].y - (transform.position + controller.center).y) <= 0.5f && ClearPathBetweenPositions(transform.position + controller.center, pathToTarget[1], (pathToTarget[1] - (transform.position + controller.center)).magnitude))
@@ -521,6 +522,7 @@ namespace DaggerfallWorkshop.Game
         void GetDestination()
         {
             CharacterController targetController = senses.Target.GetComponent<CharacterController>();
+
             // If detouring around an obstacle or fall, use the detour position
             if (avoidObstaclesTimer > 0)
             {
@@ -552,6 +554,14 @@ namespace DaggerfallWorkshop.Game
                 if (flies || IsLevitating || (swims && mobile.Summary.Enemy.ID == (int)MonsterCareers.Slaughterfish))
                     destination.y += 0.9f;
             }
+
+            /*
+            EnemyBlood sparkles2 = entityBehaviour.GetComponent<EnemyBlood>();
+            if (sparkles2)
+            {
+                if (GameManager.ClassicUpdate)
+                sparkles2.ShowMagicSparkles(senses.PredictedTargetPos);
+            }*/
 
             if (avoidObstaclesTimer <= 0 && !flies && !IsLevitating && !swims && senses.Target)
             {
@@ -670,6 +680,17 @@ namespace DaggerfallWorkshop.Game
             Vector3 sphereCastDir2d = sphereCastDir;
             sphereCastDir2d.y = 0;
 
+            // Check for a difference in elevation and for a fall along the way to the target
+            if (!flies && !swims && !IsLevitating)
+            {
+                Vector3 rayOrigin = position1 + (position2 - position1) / 2;
+                Ray ray = new Ray(rayOrigin, Vector3.down);
+                bool acceptableDrop = Physics.Raycast(ray, 2.5f);
+
+                if (!acceptableDrop)
+                    return false;
+            }
+
             RaycastHit hit;
             if (Physics.SphereCast(transform.position, controller.radius / 2, sphereCastDir, out hit, dist, ignoreMaskForPathing))
             {
@@ -680,19 +701,6 @@ namespace DaggerfallWorkshop.Game
                 else
                 {
                     return false;
-                }
-            }
-            else
-            {
-                // Check for a difference in elevation and for a fall along the way to the target
-                if (!flies && !swims && !IsLevitating)
-                {
-                    Vector3 rayOrigin = position1 + (position2 - position1) / 2;
-                    Ray ray = new Ray(rayOrigin, Vector3.down);
-                    bool acceptableDrop = Physics.Raycast(ray, 2.5f);
-
-                    if (!acceptableDrop)
-                        return false;
                 }
             }
 
@@ -877,7 +885,7 @@ namespace DaggerfallWorkshop.Game
                 TurnToTarget(direction);
                 // Classic always turns in place. Enhanced only does so if enemy is not in sight,
                 // for more natural-looking movement while pursuing.
-                if (!DaggerfallUnity.Settings.EnhancedCombatAI || !senses.TargetInSight)
+                if (!DaggerfallUnity.Settings.EnhancedCombatAI || !senses.TargetIsWithinYawAngle(90f, destination))
                     return;
             }
 
@@ -1429,7 +1437,7 @@ namespace DaggerfallWorkshop.Game
             Vector3 roundedOrigin = new Vector3(Mathf.Round(rayOrigin.x), rayOrigin.y, Mathf.Round(rayOrigin.z));
             Vector3 p1 = transform.position + controller.center + (Vector3.up * -controller.height * 0.25F);
             Vector3 p2 = p1 + (Vector3.up * controller.height / 2);
-            if (!Physics.CapsuleCast(p1, p2, controller.radius, (roundedOrigin - rayOrigin).normalized, (roundedOrigin - rayOrigin).magnitude, ignoreMaskForPathing))
+            if (!Physics.CapsuleCast(p1, p2, controller.radius, roundedOrigin - rayOrigin, (roundedOrigin - rayOrigin).magnitude, ignoreMaskForPathing))
                 rayOrigin = roundedOrigin;
 
             // Limit how many omitted points we remember
@@ -1438,9 +1446,8 @@ namespace DaggerfallWorkshop.Game
 
             // Choose whether to search right or left first, based on direction to target compared to direction we're facing now.
             // If it's to the left (signed angle is negative), we may have been searching to the right and probably should continue doing so.
-            Vector3 toDest2D = destination - rayOrigin;
-            toDest2D.y = 0;
-            int searchDirectionMultiplier = Vector3.SignedAngle(transform.forward, toDest2D, Vector3.up) < 0 ? 1 : -1;
+            Vector3 toDest = destination - rayOrigin;
+            int searchDirectionMultiplier = Vector3.SignedAngle(transform.forward, toDest, Vector3.up) < 0 ? 1 : -1;
 
             // Remember which points we have used as ray origins or destinations to eliminate searching the same points multiple times
             List<Vector3> usedOrigins = new List<Vector3> { rayOrigin };
@@ -1449,10 +1456,9 @@ namespace DaggerfallWorkshop.Game
 
             // For the very first direction to check use the direction we're already facing
             // as it is likely to be the correct one.
-            Vector3 north = transform.forward;
-            north.z++; // Adding 1 to z so this Vector3 will be north of the transform.forward vector.
-                       // Get direction angle from this enemy's position to transform.forward vector
-            float angle = Vector3.SignedAngle(north - transform.forward, transform.forward - rayOrigin, Vector3.up);
+            Vector3 north = new Vector3(0,0,1);
+            // Get angle of transform.forward relative to north
+            float angle = Vector3.SignedAngle(north, transform.forward, Vector3.up);
 
             // Make sure angle is positive
             if (angle < 0)
@@ -1499,7 +1505,7 @@ namespace DaggerfallWorkshop.Game
             //    sawDestination = true;
 
             //if (sawDestination)
-           //     startDistance = (destination - rayOrigin).magnitude;
+            //     startDistance = (destination - rayOrigin).magnitude;
 
             // Reset sawDestination for use below
             //sawDestination = false;
@@ -1508,12 +1514,10 @@ namespace DaggerfallWorkshop.Game
             {
                 rayOrigin = usedOrigins[0];
 
-                if (count != 0 && directionCounts[0] == 0) // If checking the first of the 8 directions
+                if (count != 0 && directionCounts[0] == 0) // If not the first position and checking the first of the 8 directions
                 {
-                    north = destination;
-                    north.z++; // Adding 1 to z so this Vector3 will be north of the destination Vector3.
-                               // Get direction angle from this enemy's position to destination
-                    angle = Vector3.SignedAngle(north - destination, destination - rayOrigin, Vector3.up);
+                    // Get direction angle from this enemy's position to destination
+                    angle = Vector3.SignedAngle(north, destination - rayOrigin, Vector3.up);
 
                     // Make sure angle is positive
                     if (angle < 0)
@@ -1555,6 +1559,8 @@ namespace DaggerfallWorkshop.Game
                 // Get the direction to the position to check
                 rayDir = rayDest - rayOrigin;
 
+                Debug.DrawRay(rayOrigin, rayDir, Color.red, 1, false);
+
                 // Advance counters to next direction for the next time this point is checked
                 directionCounts[0]++;
                 indexes[0] += searchDirectionMultiplier;
@@ -1574,8 +1580,8 @@ namespace DaggerfallWorkshop.Game
 
                 // Check for an obstacle on the way to this point
                 bool omitted = false;
-                p1 = rayOrigin + (Vector3.up * -controller.height * 0.15f);
-                p2 = p1 + (Vector3.up * controller.height * 0.30f);
+                //p1 = rayOrigin + (Vector3.up * -controller.height * 0.15f);
+                //p2 = p1 + (Vector3.up * controller.height * 0.30f);
                 if (!Physics.CapsuleCast(p1, p2, controller.radius, rayDir, out hit, (rayDest - rayOrigin).magnitude, ignoreMaskForPathing))
                 {
                     // No obstacle found. For ground enemies, check that any drop here is minor
@@ -1613,6 +1619,7 @@ namespace DaggerfallWorkshop.Game
                     DaggerfallEntityBehaviour hitTarget = hit.transform.GetComponent<DaggerfallEntityBehaviour>();
                     if (hitTarget == senses.Target)
                     {
+                        //Debug.Log("target");
                         break;
                     }
 
@@ -1663,12 +1670,17 @@ namespace DaggerfallWorkshop.Game
                     }
                 }
 
-                Debug.DrawRay(rayOrigin, (rayDest - rayOrigin).normalized * (rayDest - rayOrigin).magnitude, Color.red);
+                /*if (count == 0)
+                {
+                    Debug.DrawRay(rayOrigin, (rayDest - rayOrigin) * (rayDest - rayOrigin).magnitude, Color.red, 1, false);
+                    Debug.DrawRay(rayOrigin, transform.forward, Color.blue, 1, false);
+                }*/
 
                 // This rayDest is close to the destination, so stop searching
                 if (!omitted && ClearPathBetweenPositions(rayDest, destination, (destination - rayDest).magnitude))
                 {
                     success = true;
+                    //Debug.Log("close");
                     break;
                 }
                 else
@@ -1685,6 +1697,8 @@ namespace DaggerfallWorkshop.Game
 
                 count++;
             }
+
+            //Debug.Log(count);
 
             // Collect the results if the result is better than where we started
             //bool resultCloser = usedOrigins.Count > 0 && (startDistance == 0 || ((destination - usedOrigins[0]).magnitude < startDistance));

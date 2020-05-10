@@ -788,10 +788,12 @@ namespace DaggerfallWorkshop.Game
             distanceToTarget = distanceToTargetHolder;
 
             targetInSight = sawSelectedTarget;
-            target = highestPriorityTarget;
+            if (highestPriorityTarget != null)
+                target = highestPriorityTarget;
             if (DaggerfallUnity.Settings.EnhancedCombatAI && secondHighestPriorityTarget)
             {
-                secondaryTarget = secondHighestPriorityTarget;
+                if (secondHighestPriorityTarget != null)
+                    secondaryTarget = secondHighestPriorityTarget;
                 if (sawSecondaryTarget)
                     secondaryTargetPos = secondaryTarget.transform.position;
             }
