@@ -72,6 +72,7 @@ namespace DaggerfallWorkshop.Game
         readonly List<Vector3> omittedPoints = new List<Vector3>();
         readonly Vector3[] pathChoices = { new Vector3(0, 0, 1), new Vector3(1, 0, 1), new Vector3(1, 0, 0), new Vector3(1, 0, -1), new Vector3(0, 0, -1),
                                             new Vector3(-1, 0, -1), new Vector3(-1, 0, 0), new Vector3(-1, 0, 1)};
+        Vector3 gotToLastKnownPosition = EnemySenses.ResetPlayerPos;
         bool canAct;
         bool falls;
         bool flyerFalls;
@@ -414,10 +415,11 @@ namespace DaggerfallWorkshop.Game
                     stopDistance = attack.ClassicMeleeDistanceVsAI;
             }
 
-            // If we can simply move directly to the target, clear any existing path
-            if (DaggerfallUnity.Settings.EnhancedCombatAI)
+            // Enhanced Combat pathing: If we can move directly to the target, clear any existing path
+            if (DaggerfallUnity.Settings.EnhancedCombatAI && avoidObstaclesTimer <= 0)
             {
-                needToPath = !ClearPathBetweenPositions(transform.position + controller.center, senses.PredictedTargetPos, (senses.PredictedTargetPos - (transform.position + controller.center)).magnitude);
+                Vector3 currentPos = transform.position + controller.center;
+                needToPath = !ClearPathBetweenPositions(currentPos, senses.PredictedTargetPos, (senses.PredictedTargetPos - currentPos).magnitude);
 
                 if (!needToPath)
                 {
@@ -425,20 +427,20 @@ namespace DaggerfallWorkshop.Game
                     pathingTimer = 0;
                 }
 
-                // If we're following a path and got close to the next point, remove it.
+                // If we're following a path and got to the next point, remove it.
                 if (pathToTarget.Count > 0)
                 {
                     Vector3 nextPoint = pathToTarget[0];
-                    nextPoint.y = (transform.position + controller.center).y;
-                    if ((nextPoint - transform.position + controller.center).magnitude <= 0.3f) // 0.3f
+                    nextPoint.y = currentPos.y;
+                    if ((nextPoint - currentPos).magnitude <= 0.3f)
                     {
                         pathToTarget.RemoveAt(0);
                         pathingTimer = 5f;
                     }
                 }
 
-                // If we're following a path and we can shortcut to the next one, omit the current destination. Don't omit the last point, though.
-                if (pathToTarget.Count > 2 && Mathf.Abs(pathToTarget[1].y - (transform.position + controller.center).y) <= 0.5f && ClearPathBetweenPositions(transform.position + controller.center, pathToTarget[1], (pathToTarget[1] - (transform.position + controller.center)).magnitude))
+                // If we're following a path and we can skip a path point, do so.
+                if (pathToTarget.Count > 1 && ClearPathBetweenPositions(currentPos, pathToTarget[1], (pathToTarget[1] - currentPos).magnitude))
                 {
                     pathToTarget.RemoveAt(0);
                     pathingTimer = 10f;
@@ -453,7 +455,7 @@ namespace DaggerfallWorkshop.Game
 
             float distance;
             // If enemy sees the target, use the distance value from EnemySenses, as this is also used for the melee attack decision and we need to be consistent with that.
-            if (avoidObstaclesTimer <= 0 && senses.TargetInSight && pathToTarget.Count == 0)
+            if (destination == senses.PredictedTargetPos)
                 distance = senses.DistanceToTarget;
             else
                 distance = (destination - transform.position).magnitude;
@@ -543,7 +545,10 @@ namespace DaggerfallWorkshop.Game
             // Otherwise, create a path if necessary
             else if (needToPath && pathingTimer <= 0)
             {
-                destination = senses.PredictedTargetPos;
+                if ((senses.LastKnownTargetPos - transform.position).magnitude > 0.3)
+                    destination = senses.LastKnownTargetPos;
+                else
+                    destination = senses.PredictedTargetPos;
                 CreatePath();
             }
             // Otherwise, we don't need to path. Just go straight at target.
@@ -553,22 +558,14 @@ namespace DaggerfallWorkshop.Game
                 // Flying enemies and slaughterfish aim for target face
                 if (flies || IsLevitating || (swims && mobile.Summary.Enemy.ID == (int)MonsterCareers.Slaughterfish))
                     destination.y += 0.9f;
-            }
 
-            /*
-            EnemyBlood sparkles2 = entityBehaviour.GetComponent<EnemyBlood>();
-            if (sparkles2)
-            {
-                if (GameManager.ClassicUpdate)
-                sparkles2.ShowMagicSparkles(senses.PredictedTargetPos);
-            }*/
-
-            if (avoidObstaclesTimer <= 0 && !flies && !IsLevitating && !swims && senses.Target)
-            {
-                // Ground enemies target at their own height
-                // Otherwise, short enemies' vector can aim up towards the target, which could interfere with distance-to-target calculations.
-                float deltaHeight = (targetController.height - originalHeight) / 2;
-                destination.y -= deltaHeight;
+                if (!flies && !IsLevitating && !swims && senses.Target)
+                {
+                    // Ground enemies target at their own height
+                    // Otherwise, short enemies' vector can aim up towards the target, which could interfere with distance-to-target calculations.
+                    float deltaHeight = (targetController.height - originalHeight) / 2;
+                    destination.y -= deltaHeight;
+                }
             }
         }
 
@@ -669,30 +666,26 @@ namespace DaggerfallWorkshop.Game
 
         /// <summary>
         /// Returns whether there is a clear path to move the given distance from location1 to location2. True if no obstacle hit
-        /// or if combat target is the first obstacle hit.
+        /// or if the combat target is the first obstacle hit.
         /// </summary>
         bool ClearPathBetweenPositions(Vector3 position1, Vector3 position2, float dist)
         {
-            if (!flies && !swims && !IsLevitating && Mathf.Abs(position2.y - position1.y) > 0.5f)
-                return false;
-
-            Vector3 sphereCastDir = (position2 - position1).normalized;
-            Vector3 sphereCastDir2d = sphereCastDir;
-            sphereCastDir2d.y = 0;
-
             // Check for a difference in elevation and for a fall along the way to the target
             if (!flies && !swims && !IsLevitating)
             {
                 Vector3 rayOrigin = position1 + (position2 - position1) / 2;
                 Ray ray = new Ray(rayOrigin, Vector3.down);
-                bool acceptableDrop = Physics.Raycast(ray, 2.5f);
+                bool acceptableDrop = Physics.Raycast(ray, (originalHeight * 0.5f) + 2.5f);
 
                 if (!acceptableDrop)
+                {
                     return false;
+                }
             }
 
             RaycastHit hit;
-            if (Physics.SphereCast(transform.position, controller.radius / 2, sphereCastDir, out hit, dist, ignoreMaskForPathing))
+            Vector3 sphereCastDir = position2 - position1;
+            if (Physics.SphereCast(position1, controller.radius * .75f, sphereCastDir, out hit, dist, ignoreMaskForPathing))
             {
                 if (hit.transform.GetComponent<DaggerfallEntityBehaviour>() == senses.Target)
                 {
@@ -883,7 +876,7 @@ namespace DaggerfallWorkshop.Game
             if (!senses.TargetIsWithinYawAngle(5.625f, destination))
             {
                 TurnToTarget(direction);
-                // Classic always turns in place. Enhanced only does so if enemy is not in sight,
+                // Classic always turns in place. Enhanced only does so if back is turned to destination,
                 // for more natural-looking movement while pursuing.
                 if (!DaggerfallUnity.Settings.EnhancedCombatAI || !senses.TargetIsWithinYawAngle(90f, destination))
                     return;
@@ -965,7 +958,7 @@ namespace DaggerfallWorkshop.Game
             Vector3 direction2d = direction;
             if (!flies && !swims && !IsLevitating)
                 direction2d.y = 0;
-            ObstacleCheck(direction2d);
+            //ObstacleCheck(direction2d);
             FallCheck(direction2d);
 
             if (fallDetected || obstacleDetected)
@@ -1127,9 +1120,10 @@ namespace DaggerfallWorkshop.Game
         void ObstacleCheck(Vector3 direction)
         {
             obstacleDetected = false;
-            const float checkDistance = 0.8f;
+            float checkDistance = 1 - (controller.radius * .75f);
             foundUpwardSlope = false;
             foundDoor = false;
+            return;
 
             RaycastHit hit;
             // Climbable/not climbable step for the player seems to be at around a height of 0.65f. The player is 1.8f tall.
@@ -1137,7 +1131,9 @@ namespace DaggerfallWorkshop.Game
             Vector3 p1 = transform.position + (Vector3.up * -originalHeight * 0.1388F);
             Vector3 p2 = p1 + (Vector3.up * Mathf.Min(originalHeight, 1.75f) / 2);
 
-            if (Physics.CapsuleCast(p1, p2, controller.radius / 2, direction, out hit, checkDistance))
+            /*if (Physics.CapsuleCast(p1, p2, controller.radius / 2, direction, out hit, checkDistance))
+            {*/
+            if (Physics.SphereCast(transform.position + controller.center, controller.radius * .75f, direction, out hit, checkDistance, ignoreMaskForPathing))
             {
                 // Debug.DrawRay(transform.position, direction, Color.red, 2.0f);
                 obstacleDetected = true;
@@ -1196,13 +1192,13 @@ namespace DaggerfallWorkshop.Game
             }
 
             int checkDistance = 1;
-            Vector3 rayOrigin = transform.position;
+            Vector3 rayOrigin = transform.position + controller.center;
 
             direction *= checkDistance;
             Ray ray = new Ray(rayOrigin + direction, Vector3.down);
             RaycastHit hit;
 
-            fallDetected = !Physics.Raycast(ray, out hit, (originalHeight * 0.5f) + 1.5f);
+            fallDetected = !Physics.Raycast(ray, out hit, (originalHeight * 0.5f) + 2.5f);
         }
 
         /// <summary>
@@ -1437,7 +1433,7 @@ namespace DaggerfallWorkshop.Game
             Vector3 roundedOrigin = new Vector3(Mathf.Round(rayOrigin.x), rayOrigin.y, Mathf.Round(rayOrigin.z));
             Vector3 p1 = transform.position + controller.center + (Vector3.up * -controller.height * 0.25F);
             Vector3 p2 = p1 + (Vector3.up * controller.height / 2);
-            if (!Physics.CapsuleCast(p1, p2, controller.radius, roundedOrigin - rayOrigin, (roundedOrigin - rayOrigin).magnitude, ignoreMaskForPathing))
+            if (!Physics.CapsuleCast(p1, p2, controller.radius / 2, roundedOrigin - rayOrigin, (roundedOrigin - rayOrigin).magnitude, ignoreMaskForPathing))
                 rayOrigin = roundedOrigin;
 
             // Limit how many omitted points we remember
@@ -1454,21 +1450,12 @@ namespace DaggerfallWorkshop.Game
             List<Vector3> usedDestinations = new List<Vector3> { rayOrigin };
             List<int> directionCounts = new List<int> { 0 };
 
-            // For the very first direction to check use the direction we're already facing
-            // as it is likely to be the correct one.
             Vector3 north = new Vector3(0,0,1);
-            // Get angle of transform.forward relative to north
-            float angle = Vector3.SignedAngle(north, transform.forward, Vector3.up);
-
-            // Make sure angle is positive
-            if (angle < 0)
-                angle = 360 + angle;
+            float angle;
 
             // Get the index of the 8-directional position to check that matches the angle
-            int index = (int)((angle + (45 / 2)) / 45);
-            if (index > 7 || index < 0)
-                index = 0;
-            List<int> indexes = new List<int> { index };
+            int index;
+            List<int> indexes = new List<int> { };
 
             Vector3 rayDir;
             Vector3 rayDest;
@@ -1477,44 +1464,30 @@ namespace DaggerfallWorkshop.Game
             bool canGoUp = true;
             bool canGoDown = true;
 
-            // Prevent land-based enemies from searching up or down if the target is in the other direction
-            if (!flies && !swims && !IsLevitating)
-            {
-                if ((destination.y - rayOrigin.y) > 1.5f)
-                    canGoDown = false;
-                else if ((rayOrigin.y - destination.y) > 1.5f)
-                    canGoUp = false;
-            }
-
             // Variables for determining if the search was successful or target/destination was seen
             bool success = false;
-            bool sawDestination = false;
 
             // Iterative search. The head of the list of origins is the one currently being searched with.
             int count = 0;
 
-            // Get starting distance if target visible
-            //float startDistance = 0f;
             RaycastHit hit;
-            //if (Physics.SphereCast(rayOrigin, 0.45f, (destination - rayOrigin).normalized, out hit, (destination - rayOrigin).magnitude, ignoreMaskForShooting))
-            //{
-            //    if (hit.transform.GetComponent<DaggerfallEntityBehaviour>() == senses.Target)
-            //        sawDestination = true;
-            //}
-            //else
-            //    sawDestination = true;
 
-            //if (sawDestination)
-            //     startDistance = (destination - rayOrigin).magnitude;
-
-            // Reset sawDestination for use below
-            //sawDestination = false;
-
-            while (count <= searchLimit && usedOrigins.Count > 0)
+            while (count < searchLimit && usedOrigins.Count > 0)
             {
                 rayOrigin = usedOrigins[0];
 
-                if (count != 0 && directionCounts[0] == 0) // If not the first position and checking the first of the 8 directions
+                // Prevent land-based enemies from searching up or down if the target is in the other direction
+                if (!flies && !swims && !IsLevitating)
+                {
+                    canGoUp = true;
+                    canGoDown = true;
+                    if ((destination.y - rayOrigin.y) > 1.5f)
+                        canGoDown = false;
+                    else if ((rayOrigin.y - destination.y) > 1.5f)
+                        canGoUp = false;
+                }
+
+                if (directionCounts[0] == 0)
                 {
                     // Get direction angle from this enemy's position to destination
                     angle = Vector3.SignedAngle(north, destination - rayOrigin, Vector3.up);
@@ -1544,30 +1517,26 @@ namespace DaggerfallWorkshop.Game
                         rayDest.y--;
                 }
 
+                Debug.Log(rayOrigin + " start " + indexes[0]);
                 // Check that the position to check hasn't been checked or omitted. If it has, get the next one.
                 while ((omittedPoints.Contains(rayDest) || usedDestinations.Contains(rayDest)) && directionCounts[0] <= 7)
                 {
+                    Debug.DrawRay(rayOrigin, (rayDest - rayOrigin), Color.red, 10);
                     directionCounts[0]++;
+                    Debug.Log(rayOrigin + " addingdirectioncounts1 " + directionCounts[0]);
+                    searchDirectionMultiplier *= -1;
+                    Debug.Log("indexes[0] " + indexes[0] + " searchDirectionMultiplier " + searchDirectionMultiplier + " directionCounts[0] " + directionCounts[0]);
                     indexes[0] += searchDirectionMultiplier * directionCounts[0];
                     if (indexes[0] > 7)
                         indexes[0] -= 8;
                     if (indexes[0] < 0)
                         indexes[0] += 8;
                     rayDest = rayOrigin + pathChoices[indexes[0]];
+                    Debug.Log("trying " + indexes[0]);
                 }
 
                 // Get the direction to the position to check
                 rayDir = rayDest - rayOrigin;
-
-                Debug.DrawRay(rayOrigin, rayDir, Color.red, 1, false);
-
-                // Advance counters to next direction for the next time this point is checked
-                directionCounts[0]++;
-                indexes[0] += searchDirectionMultiplier;
-                if (indexes[0] > 7)
-                    indexes[0] -= 8;
-                if (indexes[0] < 0)
-                    indexes[0] += 8;
 
                 // Remove the front of the lists if all 8 directions have been checked for this ray origin
                 if (directionCounts[0] > 7)
@@ -1582,15 +1551,18 @@ namespace DaggerfallWorkshop.Game
                 bool omitted = false;
                 //p1 = rayOrigin + (Vector3.up * -controller.height * 0.15f);
                 //p2 = p1 + (Vector3.up * controller.height * 0.30f);
-                if (!Physics.CapsuleCast(p1, p2, controller.radius, rayDir, out hit, (rayDest - rayOrigin).magnitude, ignoreMaskForPathing))
+                //if (!Physics.CapsuleCast(p1, p2, controller.radius, rayDir, out hit, (rayDest - rayOrigin).magnitude, ignoreMaskForPathing))
+                //if (!Physics.SphereCast(rayOrigin, controller.radius * .75f, rayDest - rayOrigin, out hit, (rayDest - rayOrigin).magnitude - (controller.radius * .75f), ignoreMaskForPathing))
+                if (!Physics.Raycast(rayOrigin, rayDir, out hit, (rayDest - rayOrigin).magnitude, ignoreMaskForPathing))
                 {
+                    //Debug.DrawRay(rayOrigin, rayDir * (rayDest - rayOrigin).magnitude, Color.white, 10);
                     // No obstacle found. For ground enemies, check that any drop here is minor
                     bool acceptableDrop = true;
                     if (!flies && !swims && !IsLevitating)
                     {
                         float acceptableDropDist = 2.5f;
-                        //if (!canGoDown)
-                        //    acceptableDropDist = controller.height;
+                        if (!canGoDown)
+                            acceptableDropDist = controller.height;
 
                         acceptableDrop = Physics.Raycast(rayDest, Vector3.down, out hit, acceptableDropDist, ignoreMaskForPathing);
 
@@ -1619,7 +1591,6 @@ namespace DaggerfallWorkshop.Game
                     DaggerfallEntityBehaviour hitTarget = hit.transform.GetComponent<DaggerfallEntityBehaviour>();
                     if (hitTarget == senses.Target)
                     {
-                        //Debug.Log("target");
                         break;
                     }
 
@@ -1670,49 +1641,33 @@ namespace DaggerfallWorkshop.Game
                     }
                 }
 
-                /*if (count == 0)
-                {
-                    Debug.DrawRay(rayOrigin, (rayDest - rayOrigin) * (rayDest - rayOrigin).magnitude, Color.red, 1, false);
-                    Debug.DrawRay(rayOrigin, transform.forward, Color.blue, 1, false);
-                }*/
-
                 // This rayDest is close to the destination, so stop searching
                 if (!omitted && ClearPathBetweenPositions(rayDest, destination, (destination - rayDest).magnitude))
                 {
                     success = true;
-                    //Debug.Log("close");
                     break;
-                }
-                else
-                {
-                    // Check if the target/destination is visible from this point
-                    if (Physics.SphereCast(rayOrigin, 0.45f, (destination - rayOrigin).normalized, out hit, (destination - rayOrigin).magnitude, ignoreMaskForPathing))
-                    {
-                        if (hit.transform.GetComponent<DaggerfallEntityBehaviour>() == senses.Target)
-                            sawDestination = true;
-                    }
-                    else
-                        sawDestination = true;
                 }
 
                 count++;
             }
 
-            //Debug.Log(count);
-
-            // Collect the results if the result is better than where we started
-            //bool resultCloser = usedOrigins.Count > 0 && (startDistance == 0 || ((destination - usedOrigins[0]).magnitude < startDistance));
-
             foreach (Vector3 origin in usedOrigins)
             {
-                //if (resultCloser)
-                    pathToTarget.Insert(0, origin);
+                pathToTarget.Insert(0, origin);
 
-                // If didn't get to destination and destination wasn't seen, we probably need to move on somewhere else.
+                // If destination wasn't seen, we probably need to move on somewhere else.
                 // Omit every part of this path for a while.
-                if (!success && !sawDestination)
+                if (!success)
                     omittedPoints.Insert(0, origin);
             }
+
+            for (int i = 0; i < pathToTarget.Count - 1; i++)
+            {
+                rayDir = pathToTarget[i + 1] - pathToTarget[i];
+                Debug.DrawRay(pathToTarget[i], rayDir, Color.white, 1, false);
+            }
+
+            Debug.Log("count " + count + " success is " + success);
 
             pathingTimer = 5f;
         }
